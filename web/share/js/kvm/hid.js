@@ -23,13 +23,19 @@
 "use strict";
 
 
-import {tools, $, $$$} from "../tools.js";
-import {wm} from "../wm.js";
+import { tools, $, $$$ } from "../tools.js";
+import { wm } from "../wm.js";
 
-import {Keyboard} from "./keyboard.js";
-import {Mouse} from "./mouse.js";
+import { Keyboard } from "./keyboard.js";
+import { Mouse } from "./mouse.js";
 
 
+/**
+ * HID (Human Interface Device) controller for PiKVM
+ * Контроллер HID (устройство человеко-машинного интерфейса) для PiKVM
+ * @param {Function} __getGeometry - Function to get stream geometry / Функция получения геометрии стрима
+ * @param {Function} __recorder - Recorder instance / Экземпляр записи
+ */
 export function Hid(__getGeometry, __recorder) {
 	var self = this;
 
@@ -39,11 +45,15 @@ export function Hid(__getGeometry, __recorder) {
 	var __keyboard = null;
 	var __mouse = null;
 
-	var __init__ = function() {
+	/**
+	 * Initialize HID controller with keyboard and mouse
+	 * Инициализация контроллера HID с клавиатурой и мышью
+	 */
+	var __init__ = function () {
 		__keyboard = new Keyboard(__recorder.recordWsEvent);
 		__mouse = new Mouse(__getGeometry, __recorder.recordWsEvent);
 
-		document.addEventListener("visibilitychange", function() {
+		document.addEventListener("visibilitychange", function () {
 			if (document.visibilityState === "hidden") {
 				__releaseAll();
 			}
@@ -56,7 +66,7 @@ export function Hid(__getGeometry, __recorder) {
 		tools.el.setOnClick($("hid-reset-button"), __clickResetButton);
 
 		for (let el_shortcut of $$$("[data-shortcut]")) {
-			tools.el.setOnClick(el_shortcut, function() {
+			tools.el.setOnClick(el_shortcut, function () {
 				let ask = false;
 				let confirm_id = el_shortcut.getAttribute("data-shortcut-confirm");
 				if (confirm_id) {
@@ -64,7 +74,7 @@ export function Hid(__getGeometry, __recorder) {
 				}
 				let codes = el_shortcut.getAttribute("data-shortcut").split(" ");
 				if (ask) {
-					wm.confirm("Do you want to press this hotkey?", codes.join(" + ")).then(function(ok) {
+					wm.confirm("Do you want to press this hotkey?", codes.join(" + ")).then(function (ok) {
 						if (ok) {
 							__emitShortcut(codes);
 						}
@@ -82,7 +92,12 @@ export function Hid(__getGeometry, __recorder) {
 
 	/************************************************************************/
 
-	self.setSocket = function(ws) {
+	/**
+	 * Set WebSocket connection for HID devices
+	 * Установка WebSocket соединения для HID устройств
+	 * @param {WebSocket} ws - WebSocket connection / WebSocket соединение
+	 */
+	self.setSocket = function (ws) {
 		if (!ws) {
 			self.setState(null);
 		}
@@ -90,10 +105,15 @@ export function Hid(__getGeometry, __recorder) {
 		__mouse.setSocket(ws);
 	};
 
-	self.setState = function(state) {
+	/**
+	 * Set HID state and update devices
+	 * Установка состояния HID и обновление устройств
+	 * @param {Object} state - HID state object / Объект состояния HID
+	 */
+	self.setState = function (state) {
 		if (state) {
 			if (!__state) {
-				__state = {"keyboard": {}, "mouse": {}};
+				__state = { "keyboard": {}, "mouse": {} };
 			}
 			if (state.enabled !== undefined) {
 				__state.enabled = state.enabled; // Currently unused, always true
@@ -156,7 +176,7 @@ export function Hid(__getGeometry, __recorder) {
 		tools.el.setEnabled($("hid-jiggler-switch"), __state);
 	};
 
-	var __updateKeyboardOutputs = function(outputs) {
+	var __updateKeyboardOutputs = function (outputs) {
 		let avail = outputs.available;
 		if (avail.length > 0) {
 			let el = $("hid-outputs-keyboard-box");
@@ -164,9 +184,9 @@ export function Hid(__getGeometry, __recorder) {
 			if (el.__avail_json !== avail_json) {
 				let html = "";
 				for (let kv of [
-					["USB",  "usb"],
+					["USB", "usb"],
 					["PS/2", "ps2"],
-					["Off",  "disabled"],
+					["Off", "disabled"],
 				]) {
 					if (avail.includes(kv[1])) {
 						html += tools.radio.makeItem("hid-outputs-keyboard-radio", kv[0], kv[1]);
@@ -181,7 +201,7 @@ export function Hid(__getGeometry, __recorder) {
 		tools.feature.setEnabled($("hid-outputs-keyboard"), (avail.length > 0));
 	};
 
-	var __updateMouseOutputs = function(outputs, absolute) {
+	var __updateMouseOutputs = function (outputs, absolute) {
 		let has_relative = null;
 		let has_relative_squash = null;
 		let avail = outputs.available;
@@ -192,11 +212,11 @@ export function Hid(__getGeometry, __recorder) {
 				has_relative = false;
 				let html = "";
 				for (let kv of [
-					["Absolute",  "usb",       false],
+					["Absolute", "usb", false],
 					["Abs-Win98", "usb_win98", false],
-					["Relative",  "usb_rel",   true],
-					["PS/2",      "ps2",       true],
-					["Off",       "disabled",  false],
+					["Relative", "usb_rel", true],
+					["PS/2", "ps2", true],
+					["Off", "disabled", false],
 				]) {
 					if (avail.includes(kv[1])) {
 						html += tools.radio.makeItem("hid-outputs-mouse-radio", kv[0], kv[1]);
@@ -222,25 +242,34 @@ export function Hid(__getGeometry, __recorder) {
 		tools.el.setEnabled($("hid-mouse-sens-slider"), has_relative_squash);
 	};
 
-	var __releaseAll = function() {
+	/**
+	 * Release all HID inputs
+	 * Отпустить все HID вводы
+	 */
+	var __releaseAll = function () {
 		__keyboard.releaseAll();
 		__mouse.releaseAll();
 	};
 
-	var __emitShortcut = function(codes) {
-		return new Promise(function(resolve) {
+	/**
+	 * Emit keyboard shortcut sequence
+	 * Эмиссия последовательности горячих клавиш
+	 * @param {Array} codes - Array of key codes / Массив кодов клавиш
+	 */
+	var __emitShortcut = function (codes) {
+		return new Promise(function (resolve) {
 			tools.debug("HID: emitting keys:", codes);
 
 			let raw_events = [];
-			[[codes, true], [codes.slice().reverse(), false]].forEach(function(op) {
+			[[codes, true], [codes.slice().reverse(), false]].forEach(function (op) {
 				let [op_codes, state] = op;
 				for (let code of op_codes) {
-					raw_events.push({"code": code, "state": state});
+					raw_events.push({ "code": code, "state": state });
 				}
 			});
 
 			let index = 0;
-			let iterate = () => setTimeout(function() {
+			let iterate = () => setTimeout(function () {
 				__keyboard.emit(raw_events[index].code, raw_events[index].state);
 				++index;
 				if (index < raw_events.length) {
@@ -253,37 +282,49 @@ export function Hid(__getGeometry, __recorder) {
 		});
 	};
 
-	var __clickOutputsRadio = function(hid) {
+	var __clickOutputsRadio = function (hid) {
 		let output = tools.radio.getValue(`hid-outputs-${hid}-radio`);
-		tools.httpPost("api/hid/set_params", {[`${hid}_output`]: output}, function(http) {
+		tools.httpPost("api/hid/set_params", { [`${hid}_output`]: output }, function (http) {
 			if (http.status !== 200) {
 				wm.error("Can't configure HID", http.responseText);
 			}
 		});
 	};
 
-	var __clickJigglerSwitch = function() {
+	/**
+	 * Handle jiggler switch click
+	 * Обработка клика по переключателю джигглера
+	 */
+	var __clickJigglerSwitch = function () {
 		let enabled = $("hid-jiggler-switch").checked;
-		tools.httpPost("api/hid/set_params", {"jiggler": enabled}, function(http) {
+		tools.httpPost("api/hid/set_params", { "jiggler": enabled }, function (http) {
 			if (http.status !== 200) {
 				wm.error(`Can't ${enabled ? "enabled" : "disable"} mouse jiggler`, http.responseText);
 			}
 		});
 	};
 
-	var __clickConnectSwitch = function() {
+	/**
+	 * Handle connect switch click
+	 * Обработка клика по переключателю подключения
+	 */
+	var __clickConnectSwitch = function () {
 		let connected = $("hid-connect-switch").checked;
-		tools.httpPost("api/hid/set_connected", {"connected": connected}, function(http) {
+		tools.httpPost("api/hid/set_connected", { "connected": connected }, function (http) {
 			if (http.status !== 200) {
 				wm.error(`Can't ${connected ? "connect" : "disconnect"} HID`, http.responseText);
 			}
 		});
 	};
 
-	var __clickResetButton = function() {
-		wm.confirm("Are you sure you want to reset HID (keyboard & mouse)?").then(function(ok) {
+	/**
+	 * Handle reset button click
+	 * Обработка клика по кнопке сброса
+	 */
+	var __clickResetButton = function () {
+		wm.confirm("Are you sure you want to reset HID (keyboard & mouse)?").then(function (ok) {
 			if (ok) {
-				tools.httpPost("api/hid/reset", null, function(http) {
+				tools.httpPost("api/hid/reset", null, function (http) {
 					if (http.status !== 200) {
 						wm.error("HID reset error", http.responseText);
 					}

@@ -23,14 +23,18 @@
 "use strict";
 
 
-import {tools, $} from "../tools.js";
-import {wm} from "../wm.js";
+import { tools, $ } from "../tools.js";
+import { wm } from "../wm.js";
 
-import {JanusStreamer} from "./stream_janus.js";
-import {MediaStreamer} from "./stream_media.js";
-import {MjpegStreamer} from "./stream_mjpeg.js";
+import { JanusStreamer } from "./stream_janus.js";
+import { MediaStreamer } from "./stream_media.js";
+import { MjpegStreamer } from "./stream_mjpeg.js";
 
 
+/**
+ * Main streamer class that manages different streaming modes
+ * Основной класс стримера, управляющий различными режимами стриминга
+ */
 export function Streamer() {
 	var self = this;
 
@@ -40,41 +44,52 @@ export function Streamer() {
 	var __streamer = null;
 
 	var __state = null;
-	var __res = {"width": 640, "height": 480};
+	var __res = { "width": 640, "height": 480 };
 
-	var __init__ = function() {
+	/**
+	 * Initialize the streamer with UI controls and event handlers
+	 * Инициализация стримера с элементами управления и обработчиками событий
+	 */
+	var __init__ = function () {
 		__streamer = new MjpegStreamer(__setActive, __setInactive, __setInfo, __organizeHook);
 
 		$("stream-led").title = "No stream from PiKVM";
 
-		tools.slider.setParams($("stream-quality-slider"), 5, 100, 5, 80, function(value) {
+		// Quality slider setup / Настройка слайдера качества
+		tools.slider.setParams($("stream-quality-slider"), 5, 100, 5, 80, function (value) {
 			$("stream-quality-value").innerText = `${value}%`;
 		});
 		tools.slider.setOnUpDelayed($("stream-quality-slider"), 1000, (value) => __sendParam("quality", value));
 
-		tools.slider.setParams($("stream-h264-bitrate-slider"), 25, 20000, 25, 5000, function(value) {
+		// H.264 bitrate slider setup / Настройка слайдера битрейта H.264
+		tools.slider.setParams($("stream-h264-bitrate-slider"), 25, 20000, 25, 5000, function (value) {
 			$("stream-h264-bitrate-value").innerText = value;
 		});
 		tools.slider.setOnUpDelayed($("stream-h264-bitrate-slider"), 1000, (value) => __sendParam("h264_bitrate", value));
 
-		tools.slider.setParams($("stream-h264-gop-slider"), 0, 60, 1, 30, function(value) {
+		// H.264 GOP slider setup / Настройка слайдера GOP H.264
+		tools.slider.setParams($("stream-h264-gop-slider"), 0, 60, 1, 30, function (value) {
 			$("stream-h264-gop-value").innerText = value;
 		});
 		tools.slider.setOnUpDelayed($("stream-h264-gop-slider"), 1000, (value) => __sendParam("h264_gop", value));
 
-		tools.slider.setParams($("stream-desired-fps-slider"), 0, 120, 1, 0, function(value) {
+		// Desired FPS slider setup / Настройка слайдера желаемого FPS
+		tools.slider.setParams($("stream-desired-fps-slider"), 0, 120, 1, 0, function (value) {
 			$("stream-desired-fps-value").innerText = (value === 0 ? "Unlimited" : value);
 		});
 		tools.slider.setOnUpDelayed($("stream-desired-fps-slider"), 1000, (value) => __sendParam("desired_fps", value));
 
+		// Resolution selector setup / Настройка селектора разрешения
 		$("stream-resolution-selector").onchange = (() => __sendParam("resolution", $("stream-resolution-selector").value));
 
+		// Stream mode radio buttons setup / Настройка радиокнопок режима стрима
 		tools.radio.setOnClick("stream-mode-radio", __clickModeRadio, false);
 
+		// Orientation radio setup / Настройка радиокнопок ориентации
 		// Not getInt() because of radio is a string container.
 		// Also don't reset Streamer at class init.
 		tools.radio.clickValue("stream-orient-radio", tools.storage.get("stream.orient", 0));
-		tools.radio.setOnClick("stream-orient-radio", function() {
+		tools.radio.setOnClick("stream-orient-radio", function () {
 			if (["janus", "media"].includes(__streamer.getMode())) {
 				let orient = parseInt(tools.radio.getValue("stream-orient-radio"));
 				tools.storage.setInt("stream.orient", orient);
@@ -84,7 +99,8 @@ export function Streamer() {
 			}
 		}, false);
 
-		tools.slider.setParams($("stream-audio-volume-slider"), 0, 100, 1, 0, function(value) {
+		// Audio volume slider setup / Настройка слайдера громкости аудио
+		tools.slider.setParams($("stream-audio-volume-slider"), 0, 100, 1, 0, function (value) {
 			$("stream-video").muted = !value;
 			$("stream-video").volume = value / 100;
 			$("stream-audio-volume-value").innerText = value + "%";
@@ -97,7 +113,8 @@ export function Streamer() {
 			tools.el.setEnabled($("stream-mic-switch"), !!value);
 		});
 
-		tools.storage.bindSimpleSwitch($("stream-mic-switch"), "stream.mic", false, function(allow_mic) {
+		// Microphone switch setup / Настройка переключателя микрофона
+		tools.storage.bindSimpleSwitch($("stream-mic-switch"), "stream.mic", false, function (allow_mic) {
 			if (__streamer.getMode() === "janus") {
 				if (__streamer.isMicAllowed() !== allow_mic) {
 					__resetStream();
@@ -105,9 +122,11 @@ export function Streamer() {
 			}
 		});
 
+		// Screenshot and reset buttons setup / Настройка кнопок скриншота и сброса
 		tools.el.setOnClick($("stream-screenshot-button"), __clickScreenshotButton);
 		tools.el.setOnClick($("stream-reset-button"), __clickResetButton);
 
+		// Window hooks setup / Настройка хуков окна
 		$("stream-window").show_hook = () => __applyState(__state);
 		$("stream-window").close_hook = () => __applyState(null);
 		$("stream-window").organize_hook = __organizeHook;
@@ -115,14 +134,24 @@ export function Streamer() {
 
 	/************************************************************************/
 
-	self.ensureDeps = function(callback) {
-		JanusStreamer.ensure_janus(function(avail) {
+	/**
+	 * Ensure dependencies are loaded (Janus library)
+	 * Обеспечение загрузки зависимостей (библиотека Janus)
+	 * @param {Function} callback - Callback function after deps check / Функция обратного вызова после проверки зависимостей
+	 */
+	self.ensureDeps = function (callback) {
+		JanusStreamer.ensure_janus(function (avail) {
 			__janus_imported = avail;
 			callback();
 		});
 	};
 
-	self.getGeometry = function() {
+	/**
+	 * Get current stream geometry for aspect ratio calculations
+	 * Получение текущей геометрии стрима для расчётов соотношения сторон
+	 * @returns {Object} Geometry object with coordinates and dimensions / Объект геометрии с координатами и размерами
+	 */
+	self.getGeometry = function () {
 		// Первоначально обновление геометрии считалось через ResizeObserver.
 		// Но оно не ловило некоторые события, например в последовательности:
 		//   - Находять в HD переходим в фулскрин
@@ -130,8 +159,8 @@ export function Streamer() {
 		//   - Убираем фулскрин
 		//   - Переходим в HD
 		//   - Видим нарушение пропорций
-		// Так что теперь используются быстре рассчеты через offset*
-		// вместо getBoundingClientRect().
+		// So now faster calculations through offset* are used
+		// instead of getBoundingClientRect().
 		let res = __streamer.getResolution();
 		let ratio = Math.min(res.view_width / res.real_width, res.view_height / res.real_height);
 		return {
@@ -144,7 +173,12 @@ export function Streamer() {
 		};
 	};
 
-	self.setState = function(state) {
+	/**
+	 * Set stream state and update UI accordingly
+	 * Установка состояния стрима и соответствующее обновление UI
+	 * @param {Object} state - Stream state object / Объект состояния стрима
+	 */
+	self.setState = function (state) {
 		if (state) {
 			if (!__state) {
 				__state = {};
@@ -165,7 +199,12 @@ export function Streamer() {
 		__applyState((visible && __state && __state.features) ? state : null);
 	};
 
-	var __applyState = function(state) {
+	/**
+	 * Apply stream state and configure UI elements
+	 * Применение состояния стрима и настройка элементов UI
+	 * @param {Object} state - Stream state to apply / Состояние стрима для применения
+	 */
+	var __applyState = function (state) {
 		if (__janus_imported === null) {
 			alert("__janus_imported is null, please report");
 			return;
@@ -190,10 +229,12 @@ export function Streamer() {
 				+ ` webrtc=${sup_webrtc}, h264=${sup_h264}, janus_imported=${__janus_imported}`
 			);
 
+			// Show/hide compatibility messages / Показать/скрыть сообщения о совместимости
 			tools.hidden.setVisible($("stream-message-no-webrtc"), __janus_imported && f.h264 && !sup_webrtc);
 			tools.hidden.setVisible($("stream-message-no-vd"), f.h264 && !sup_vd);
 			tools.hidden.setVisible($("stream-message-no-h264"), __janus_imported && f.h264 && !sup_h264);
 
+			// Configure sliders based on limits / Настройка слайдеров на основе ограничений
 			tools.slider.setRange($("stream-desired-fps-slider"), l.desired_fps.min, l.desired_fps.max);
 			if (f.resolution) {
 				let el = $("stream-resolution-selector");
@@ -209,6 +250,7 @@ export function Streamer() {
 				tools.slider.setRange($("stream-h264-gop-slider"), l.h264_gop.min, l.h264_gop.max);
 			}
 
+			// Enable/disable features based on capabilities / Включение/отключение функций на основе возможностей
 			// tools.feature.setEnabled($("stream-quality"), f.quality); // Only on s.encoder.quality
 			tools.feature.setEnabled($("stream-resolution"), f.resolution);
 			tools.feature.setEnabled($("stream-h264-bitrate"), f.h264);
@@ -219,6 +261,7 @@ export function Streamer() {
 				tools.feature.setEnabled($("stream-mic"), false);
 			}
 
+			// Select best available mode / Выбор лучшего доступного режима
 			let mode = tools.storage.get("stream.mode", "janus");
 			if (mode === "janus" && !has_janus) {
 				mode = "media";
@@ -233,6 +276,7 @@ export function Streamer() {
 			let s = state.streamer;
 			__res = s.source.resolution;
 
+			// Update resolution selector / Обновление селектора разрешения
 			{
 				let res = `${__res.width}x${__res.height}`;
 				let el = $("stream-resolution-selector");
@@ -254,17 +298,30 @@ export function Streamer() {
 		}
 	};
 
-	var __setActive = function() {
+	/**
+	 * Set stream as active and update UI indicators
+	 * Установка стрима как активного и обновление индикаторов UI
+	 */
+	var __setActive = function () {
 		$("stream-led").className = "led-green";
 		$("stream-led").title = "Stream is active";
 	};
 
-	var __setInactive = function() {
+	/**
+	 * Set stream as inactive and update UI indicators
+	 * Установка стрима как неактивного и обновление индикаторов UI
+	 */
+	var __setInactive = function () {
 		$("stream-led").className = "led-gray";
 		$("stream-led").title = "No stream from PiKVM";
 	};
 
-	var __setControlsEnabled = function(enabled) {
+	/**
+	 * Enable or disable stream control elements
+	 * Включение или отключение элементов управления стримом
+	 * @param {boolean} enabled - Whether to enable controls / Включить ли элементы управления
+	 */
+	var __setControlsEnabled = function (enabled) {
 		tools.el.setEnabled($("stream-quality-slider"), enabled);
 		tools.el.setEnabled($("stream-desired-fps-slider"), enabled);
 		tools.el.setEnabled($("stream-resolution-selector"), enabled);
@@ -272,7 +329,14 @@ export function Streamer() {
 		tools.el.setEnabled($("stream-h264-gop-slider"), enabled);
 	};
 
-	var __setInfo = function(is_active, online, text) {
+	/**
+	 * Set stream info and update window title
+	 * Установка информации о стриме и обновление заголовка окна
+	 * @param {boolean} is_active - Whether stream is active / Активен ли стрим
+	 * @param {boolean} online - Whether source is online / Онлайн ли источник
+	 * @param {string} text - Additional info text / Дополнительный текст информации
+	 */
+	var __setInfo = function (is_active, online, text) {
 		$("stream-box").classList.toggle("stream-box-offline", !online);
 		let el_grab = document.querySelector("#stream-window-header .window-grab");
 		let el_info = $("stream-info");
@@ -295,12 +359,21 @@ export function Streamer() {
 		el_grab.innerText = el_info.innerText = title;
 	};
 
-	var __organizeHook = function() {
+	/**
+	 * Organize stream window with proper aspect ratio
+	 * Организация окна стрима с правильным соотношением сторон
+	 */
+	var __organizeHook = function () {
 		let geo = self.getGeometry();
 		wm.setAspectRatio($("stream-window"), geo.width, geo.height);
 	};
 
-	var __resetStream = function(mode=null) {
+	/**
+	 * Reset stream with specified mode or current mode
+	 * Сброс стрима с указанным режимом или текущим режимом
+	 * @param {string} mode - Stream mode to reset to / Режим стрима для сброса
+	 */
+	var __resetStream = function (mode = null) {
 		if (mode === null) {
 			mode = __streamer.getMode();
 		}
@@ -329,7 +402,11 @@ export function Streamer() {
 		}
 	};
 
-	var __clickModeRadio = function() {
+	/**
+	 * Handle stream mode radio button click
+	 * Обработка клика по радиокнопке режима стрима
+	 */
+	var __clickModeRadio = function () {
 		let mode = tools.radio.getValue("stream-mode-radio");
 		tools.storage.set("stream.mode", mode);
 		if (mode !== __streamer.getMode()) {
@@ -340,15 +417,23 @@ export function Streamer() {
 		}
 	};
 
-	var __clickScreenshotButton = function() {
+	/**
+	 * Handle screenshot button click
+	 * Обработка клика по кнопке скриншота
+	 */
+	var __clickScreenshotButton = function () {
 		tools.windowOpen("api/streamer/snapshot");
 	};
 
-	var __clickResetButton = function() {
-		wm.confirm("Are you sure you want to reset the stream?").then(function(ok) {
+	/**
+	 * Handle reset button click with confirmation
+	 * Обработка клика по кнопке сброса с подтверждением
+	 */
+	var __clickResetButton = function () {
+		wm.confirm("Are you sure you want to reset the stream?").then(function (ok) {
 			if (ok) {
 				__resetStream();
-				tools.httpPost("api/streamer/reset", null, function(http) {
+				tools.httpPost("api/streamer/reset", null, function (http) {
 					if (http.status !== 200) {
 						wm.error("Can't reset stream", http.responseText);
 					}
@@ -357,8 +442,14 @@ export function Streamer() {
 		});
 	};
 
-	var __sendParam = function(name, value) {
-		tools.httpPost("api/streamer/set_params", {[name]: value}, function(http) {
+	/**
+	 * Send parameter to streamer API
+	 * Отправка параметра в API стримера
+	 * @param {string} name - Parameter name / Имя параметра
+	 * @param {*} value - Parameter value / Значение параметра
+	 */
+	var __sendParam = function (name, value) {
+		tools.httpPost("api/streamer/set_params", { [name]: value }, function (http) {
 			if (http.status !== 200) {
 				wm.error("Can't configure stream", http.responseText);
 			}

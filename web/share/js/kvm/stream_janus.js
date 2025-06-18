@@ -23,12 +23,23 @@
 "use strict";
 
 
-import {tools, $} from "../tools.js";
+import { tools, $ } from "../tools.js";
 
 
 var _Janus = null;
 
 
+/**
+ * WebRTC H.264 streamer using Janus Gateway
+ * WebRTC H.264 стример с использованием Janus Gateway
+ * @param {Function} __setActive - Callback when stream becomes active / Колбэк когда стрим становится активным
+ * @param {Function} __setInactive - Callback when stream becomes inactive / Колбэк когда стрим становится неактивным
+ * @param {Function} __setInfo - Callback to set stream info / Колбэк для установки информации о стриме
+ * @param {Function} __organizeHook - Callback to organize stream window / Колбэк для организации окна стрима
+ * @param {number} __orient - Stream orientation / Ориентация стрима
+ * @param {boolean} __allow_audio - Whether to allow audio / Разрешить ли аудио
+ * @param {boolean} __allow_mic - Whether to allow microphone / Разрешить ли микрофон
+ */
 export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeHook, __orient, __allow_audio, __allow_mic) {
 	var self = this;
 
@@ -48,18 +59,40 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 
 	var __state = null;
 	var __frames = 0;
-	var __res = {"width": -1, "height": -1};
+	var __res = { "width": -1, "height": -1 };
 	var __resize_listener_installed = false;
 
 	var __ice = null;
 
 	/************************************************************************/
 
+	/**
+	 * Get current stream orientation
+	 * Получение текущей ориентации стрима
+	 * @returns {number} Orientation value / Значение ориентации
+	 */
 	self.getOrientation = () => __orient;
+
+	/**
+	 * Check if audio is allowed
+	 * Проверка разрешения аудио
+	 * @returns {boolean} Whether audio is allowed / Разрешено ли аудио
+	 */
 	self.isAudioAllowed = () => __allow_audio;
+
+	/**
+	 * Check if microphone is allowed
+	 * Проверка разрешения микрофона
+	 * @returns {boolean} Whether microphone is allowed / Разрешён ли микрофон
+	 */
 	self.isMicAllowed = () => __allow_mic;
 
-	self.getName = function() {
+	/**
+	 * Get streamer name with audio/mic info
+	 * Получение имени стримера с информацией об аудио/микрофоне
+	 * @returns {string} Streamer name / Имя стримера
+	 */
+	self.getName = function () {
 		let name = "WebRTC H.264";
 		if (__allow_audio) {
 			name += " + Audio";
@@ -69,9 +102,20 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 		return name;
 	};
+
+	/**
+	 * Get streamer mode identifier
+	 * Получение идентификатора режима стримера
+	 * @returns {string} Streamer mode / Режим стримера
+	 */
 	self.getMode = () => "janus";
 
-	self.getResolution = function() {
+	/**
+	 * Get current stream resolution information
+	 * Получение информации о текущем разрешении стрима
+	 * @returns {Object} Resolution object with real and view dimensions / Объект разрешения с реальными и отображаемыми размерами
+	 */
+	self.getResolution = function () {
 		let el = $("stream-video");
 		return {
 			// Разрешение видео или элемента
@@ -82,7 +126,12 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		};
 	};
 
-	self.ensureStream = function(state) {
+	/**
+	 * Ensure stream is running with given state
+	 * Обеспечение работы стрима с заданным состоянием
+	 * @param {Object} state - Stream state object / Объект состояния стрима
+	 */
+	self.ensureStream = function (state) {
 		__state = state;
 		__stop = false;
 		__ensureJanus(false);
@@ -92,7 +141,11 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
-	self.stopStream = function() {
+	/**
+	 * Stop the stream and cleanup resources
+	 * Остановка стрима и очистка ресурсов
+	 */
+	self.stopStream = function () {
 		__stop = true;
 		__destroyJanus();
 		if (__resize_listener_installed) {
@@ -101,7 +154,12 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
-	var __videoResizeHandler = function(ev) {
+	/**
+	 * Handle video element resize events
+	 * Обработка событий изменения размера видео элемента
+	 * @param {Event} ev - Resize event / Событие изменения размера
+	 */
+	var __videoResizeHandler = function (ev) {
 		let el = ev.target;
 		if (__res.width !== el.videoWidth || __res.height !== el.videoHeight) {
 			__res.width = el.videoWidth;
@@ -110,7 +168,12 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
-	var __ensureJanus = function(internal) {
+	/**
+	 * Ensure Janus connection is established
+	 * Обеспечение установления соединения с Janus
+	 * @param {boolean} internal - Whether this is an internal retry / Является ли это внутренней повторной попыткой
+	 */
+	var __ensureJanus = function (internal) {
 		if (__janus === null && !__stop && (!__ensuring || internal)) {
 			__ensuring = true;
 			__setInactive();
@@ -122,7 +185,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 				"destroyOnUnload": false,
 				"iceServers": () => __getIceServers(),
 				"success": __attachJanus,
-				"error": function(error) {
+				"error": function (error) {
 					__logError(error);
 					__setInfo(false, false, error);
 					__finishJanus();
@@ -131,16 +194,25 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
-	var __getIceServers = function() {
+	/**
+	 * Get ICE servers configuration
+	 * Получение конфигурации ICE серверов
+	 * @returns {Array} Array of ICE server objects / Массив объектов ICE серверов
+	 */
+	var __getIceServers = function () {
 		if (__ice !== null && __ice.url) {
 			__logInfo("Using the custom ICE Server got from uStreamer:", __ice);
-			return [{"urls": __ice.url}];
+			return [{ "urls": __ice.url }];
 		} else {
 			return [];
 		}
 	};
 
-	var __finishJanus = function() {
+	/**
+	 * Finish Janus connection and cleanup
+	 * Завершение соединения с Janus и очистка
+	 */
+	var __finishJanus = function () {
 		if (__stop) {
 			if (__retry_ensure_timeout !== null) {
 				clearTimeout(__retry_ensure_timeout);
@@ -149,7 +221,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 			__ensuring = false;
 		} else {
 			if (__retry_ensure_timeout === null) {
-				__retry_ensure_timeout = setTimeout(function() {
+				__retry_ensure_timeout = setTimeout(function () {
 					__retry_ensure_timeout = null;
 					__ensureJanus(true);
 				}, 5000);
@@ -169,7 +241,11 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
-	var __destroyJanus = function() {
+	/**
+	 * Destroy Janus connection and cleanup tracks
+	 * Уничтожение соединения с Janus и очистка треков
+	 */
+	var __destroyJanus = function () {
 		if (__janus !== null) {
 			__janus.destroy();
 		}
@@ -182,7 +258,12 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
-	var __addTrack = function(track) {
+	/**
+	 * Add track to video element
+	 * Добавление трека к видео элементу
+	 * @param {MediaStreamTrack} track - Media track to add / Медиа трек для добавления
+	 */
+	var __addTrack = function (track) {
 		let el = $("stream-video");
 		if (el.srcObject) {
 			for (let tr of el.srcObject.getTracks()) {
@@ -207,7 +288,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}*/
 	};
 
-	var __removeTrack = function(track) {
+	var __removeTrack = function (track) {
 		let el = $("stream-video");
 		if (!el.srcObject) {
 			return;
@@ -221,7 +302,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
-	var __attachJanus = function() {
+	var __attachJanus = function () {
 		if (__janus === null) {
 			return;
 		}
@@ -229,38 +310,38 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 			"plugin": "janus.plugin.ustreamer",
 			"opaqueId": "oid-" + _Janus.randomString(12),
 
-			"success": function(handle) {
+			"success": function (handle) {
 				__handle = handle;
 				__logInfo("uStreamer attached:", handle.getPlugin(), handle.getId());
 				__logInfo("Sending FEATURES ...");
-				__handle.send({"message": {"request": "features"}});
+				__handle.send({ "message": { "request": "features" } });
 			},
 
-			"error": function(error) {
+			"error": function (error) {
 				__logError("Can't attach uStreamer: ", error);
 				__setInfo(false, false, error);
 				__destroyJanus();
 			},
 
-			"connectionState": function(state) {
+			"connectionState": function (state) {
 				__logInfo("Peer connection state changed to", state);
 				if (state === "failed") {
 					__destroyJanus();
 				}
 			},
 
-			"iceState": function(state) {
+			"iceState": function (state) {
 				__logInfo("ICE state changed to", state);
 			},
 
-			"webrtcState": function(up) {
+			"webrtcState": function (up) {
 				__logInfo("Janus says our WebRTC PeerConnection is", (up ? "up" : "down"), "now");
 				if (up) {
 					__sendKeyRequired();
 				}
 			},
 
-			"onmessage": function(msg, jsep) {
+			"onmessage": function (msg, jsep) {
 				__stopRetryEmsgInterval();
 
 				if (msg.result) {
@@ -281,7 +362,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 					__logError("Got uStreamer error message:", msg.error_code, "-", msg.error);
 					__setInfo(false, false, msg.error);
 					if (__retry_emsg_timeout === null) {
-						__retry_emsg_timeout = setTimeout(function() {
+						__retry_emsg_timeout = setTimeout(function () {
 							if (!__stop) {
 								__sendStop();
 								__sendWatch();
@@ -296,9 +377,9 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 
 				if (jsep) {
 					__logInfo("Handling SDP:", jsep);
-					let tracks = [{"type": "video", "capture": false, "recv": true, "add": true}];
+					let tracks = [{ "type": "video", "capture": false, "recv": true, "add": true }];
 					if (__allow_audio) {
-						tracks.push({"type": "audio", "capture": __allow_mic, "recv": true, "add": true});
+						tracks.push({ "type": "audio", "capture": __allow_mic, "recv": true, "add": true });
 					}
 					__handle.createAnswer({
 						"jsep": jsep,
@@ -308,16 +389,16 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 						// Chrome is playing OPUS as mono without this hack
 						//   - https://issues.webrtc.org/issues/41481053 - IT'S NOT FIXED!
 						//   - https://github.com/ossrs/srs/pull/2683/files
-						"customizeSdp": function(jsep) {
+						"customizeSdp": function (jsep) {
 							jsep.sdp = jsep.sdp.replace("useinbandfec=1", "useinbandfec=1;stereo=1");
 						},
 
-						"success": function(jsep) {
+						"success": function (jsep) {
 							__logInfo("Got SDP:", jsep);
 							__sendStart(jsep);
 						},
 
-						"error": function(error) {
+						"error": function (error) {
 							__logInfo("Error on SDP handling:", error);
 							__setInfo(false, false, error);
 							//__destroyJanus();
@@ -327,7 +408,7 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 			},
 
 			// Janus 1.x
-			"onremotetrack": function(track, id, added, meta) {
+			"onremotetrack": function (track, id, added, meta) {
 				// Chrome sends `muted` notifiation for tracks in `disconnected` ICE state
 				// and Janus.js just removes muted track from list of available tracks.
 				// But track still exists actually so it's safe to just ignore
@@ -345,35 +426,35 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 				}
 			},
 
-			"oncleanup": function() {
+			"oncleanup": function () {
 				__logInfo("Got a cleanup notification");
 				__stopInfoInterval();
 			},
 		});
 	};
 
-	var __startInfoInterval = function() {
+	var __startInfoInterval = function () {
 		__stopInfoInterval();
 		__setActive();
 		__updateInfo();
 		__info_interval = setInterval(__updateInfo, 1000);
 	};
 
-	var __stopInfoInterval = function() {
+	var __stopInfoInterval = function () {
 		if (__info_interval !== null) {
 			clearInterval(__info_interval);
 		}
 		__info_interval = null;
 	};
 
-	var __stopRetryEmsgInterval = function() {
+	var __stopRetryEmsgInterval = function () {
 		if (__retry_emsg_timeout !== null) {
 			clearTimeout(__retry_emsg_timeout);
 			__retry_emsg_timeout = null;
 		}
 	};
 
-	var __updateInfo = function() {
+	var __updateInfo = function () {
 		if (__handle !== null) {
 			let info = "";
 			if (__handle !== null) {
@@ -395,29 +476,33 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
-	var __isOnline = function() {
+	var __isOnline = function () {
 		return !!(__state && __state.source.online);
 	};
 
-	var __sendWatch = function() {
+	var __sendWatch = function () {
 		if (__handle) {
 			__logInfo(`Sending WATCH(orient=${__orient}, audio=${__allow_audio}, mic=${__allow_mic}) ...`);
-			__handle.send({"message": {"request": "watch", "params": {
-				"orientation": __orient,
-				"audio": __allow_audio,
-				"mic": __allow_mic,
-			}}});
+			__handle.send({
+				"message": {
+					"request": "watch", "params": {
+						"orientation": __orient,
+						"audio": __allow_audio,
+						"mic": __allow_mic,
+					}
+				}
+			});
 		}
 	};
 
-	var __sendStart = function(jsep) {
+	var __sendStart = function (jsep) {
 		if (__handle) {
 			__logInfo("Sending START ...");
-			__handle.send({"message": {"request": "start"}, "jsep": jsep});
+			__handle.send({ "message": { "request": "start" }, "jsep": jsep });
 		}
 	};
 
-	var __sendKeyRequired = function() {
+	var __sendKeyRequired = function () {
 		/*if (__handle) {
 			// На этом шаге мы говорим что стрим пошел и надо запросить кейфрейм
 			__logInfo("Sending KEY_REQUIRED ...");
@@ -425,11 +510,11 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}*/
 	};
 
-	var __sendStop = function() {
+	var __sendStop = function () {
 		__stopInfoInterval();
 		if (__handle) {
 			__logInfo("Sending STOP ...");
-			__handle.send({"message": {"request": "stop"}});
+			__handle.send({ "message": { "request": "stop" } });
 			__handle.hangup();
 		}
 	};
@@ -438,12 +523,12 @@ export function JanusStreamer(__setActive, __setInactive, __setInfo, __organizeH
 	var __logError = (...args) => tools.error("Stream [Janus]:", ...args);
 }
 
-JanusStreamer.ensure_janus = function(callback) {
+JanusStreamer.ensure_janus = function (callback) {
 	if (_Janus === null) {
 		import("./janus.js").then((module) => {
 			module.Janus.init({
 				"debug": "all",
-				"callback": function() {
+				"callback": function () {
 					_Janus = module.Janus;
 					callback(true);
 				},
@@ -457,6 +542,6 @@ JanusStreamer.ensure_janus = function(callback) {
 	}
 };
 
-JanusStreamer.is_webrtc_available = function() {
+JanusStreamer.is_webrtc_available = function () {
 	return !!window.RTCPeerConnection;
 };

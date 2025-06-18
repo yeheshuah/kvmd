@@ -23,21 +23,25 @@
 "use strict";
 
 
-import {tools, $} from "../tools.js";
-import {wm} from "../wm.js";
+import { tools, $ } from "../tools.js";
+import { wm } from "../wm.js";
 
-import {Info} from "./info.js";
-import {Recorder} from "./recorder.js";
-import {Hid} from "./hid.js";
-import {Paste} from "./paste.js";
-import {Atx} from "./atx.js";
-import {Msd} from "./msd.js";
-import {Streamer} from "./stream.js";
-import {Gpio} from "./gpio.js";
-import {Ocr} from "./ocr.js";
-import {Switch} from "./switch.js";
+import { Info } from "./info.js";
+import { Recorder } from "./recorder.js";
+import { Hid } from "./hid.js";
+import { Paste } from "./paste.js";
+import { Atx } from "./atx.js";
+import { Msd } from "./msd.js";
+import { Streamer } from "./stream.js";
+import { Gpio } from "./gpio.js";
+import { Ocr } from "./ocr.js";
+import { Switch } from "./switch.js";
 
 
+/**
+ * Main session manager for PiKVM KVM interface
+ * Основной менеджер сессии для интерфейса PiKVM KVM
+ */
 export function Session() {
 	// var self = this;
 
@@ -59,17 +63,25 @@ export function Session() {
 	var __ocr = new Ocr(__streamer.getGeometry);
 	var __switch = new Switch();
 
-	var __init__ = function() {
+	/**
+	 * Initialize session and start connection
+	 * Инициализация сессии и запуск соединения
+	 */
+	var __init__ = function () {
 		__streamer.ensureDeps(() => __startSession());
 	};
 
 	/************************************************************************/
 
-	var __startSession = function() {
+	/**
+	 * Start WebSocket session with PiKVM server
+	 * Запуск WebSocket сессии с сервером PiKVM
+	 */
+	var __startSession = function () {
 		$("link-led").className = "led-yellow";
 		$("link-led").title = "Connecting...";
 
-		tools.httpGet("api/auth/check", null, function(http) {
+		tools.httpGet("api/auth/check", null, function (http) {
 			if (http.status === 200) {
 				__ws = new WebSocket(tools.makeWsUrl("api/ws"));
 				__ws.sendHidEvent = (ev) => __sendHidEvent(__ws, ev.event_type, ev.event);
@@ -87,7 +99,7 @@ export function Session() {
 				__ws.onclose = __wsCloseHandler;
 			} else if (http.status === 401 || http.status === 403) {
 				window.onbeforeunload = () => null;
-				wm.error("Unexpected logout occured, please login again").then(function() {
+				wm.error("Unexpected logout occured, please login again").then(function () {
 					tools.currentOpen("login");
 				});
 			} else {
@@ -96,7 +108,12 @@ export function Session() {
 		});
 	};
 
-	var __wsOpenHandler = function(ev) {
+	/**
+	 * Handle WebSocket open event
+	 * Обработка события открытия WebSocket
+	 * @param {Event} ev - Open event / Событие открытия
+	 */
+	var __wsOpenHandler = function (ev) {
 		tools.debug("Session: socket opened:", ev);
 		$("link-led").className = "led-green";
 		$("link-led").title = "Connected";
@@ -106,14 +123,25 @@ export function Session() {
 		__ping_timer = setInterval(__pingServer, 1000);
 	};
 
-	var __wsBinHandler = function(data) {
+	/**
+	 * Handle binary messages from WebSocket
+	 * Обработка бинарных сообщений из WebSocket
+	 * @param {ArrayBuffer} data - Binary data / Бинарные данные
+	 */
+	var __wsBinHandler = function (data) {
 		data = new Uint8Array(data);
 		if (data[0] === 255) { // Pong
 			__missed_heartbeats = 0;
 		}
 	};
 
-	var __wsJsonHandler = function(ev_type, ev) {
+	/**
+	 * Handle JSON messages from WebSocket
+	 * Обработка JSON сообщений из WebSocket
+	 * @param {string} ev_type - Event type / Тип события
+	 * @param {Object} ev - Event data / Данные события
+	 */
+	var __wsJsonHandler = function (ev_type, ev) {
 		switch (ev_type) {
 			case "info": __info.setState(ev); break;
 			case "gpio": __gpio.setState(ev); break;
@@ -141,7 +169,12 @@ export function Session() {
 		}
 	};
 
-	var __wsErrorHandler = function(ev) {
+	/**
+	 * Handle WebSocket error event
+	 * Обработка события ошибки WebSocket
+	 * @param {Event} ev - Error event / Событие ошибки
+	 */
+	var __wsErrorHandler = function (ev) {
 		tools.error("Session: socket error:", ev);
 		if (__ws) {
 			__ws.onclose = null;
@@ -150,7 +183,12 @@ export function Session() {
 		}
 	};
 
-	var __wsCloseHandler = function(ev) {
+	/**
+	 * Handle WebSocket close event and cleanup
+	 * Обработка события закрытия WebSocket и очистка
+	 * @param {Event} ev - Close event / Событие закрытия
+	 */
+	var __wsCloseHandler = function (ev) {
 		tools.debug("Session: socket closed:", ev);
 		$("link-led").className = "led-gray";
 
@@ -170,13 +208,17 @@ export function Session() {
 		__switch.setState(null);
 		__ws = null;
 
-		setTimeout(function() {
+		setTimeout(function () {
 			$("link-led").className = "led-yellow";
 			setTimeout(__startSession, 500);
 		}, 500);
 	};
 
-	var __pingServer = function() {
+	/**
+	 * Send ping to server to keep connection alive
+	 * Отправка ping серверу для поддержания соединения
+	 */
+	var __pingServer = function () {
 		try {
 			__missed_heartbeats += 1;
 			if (__missed_heartbeats >= 15) {
@@ -190,7 +232,14 @@ export function Session() {
 
 	var __ascii_encoder = new TextEncoder("ascii");
 
-	var __sendHidEvent = function(ws, ev_type, ev) {
+	/**
+	 * Send HID event to server via WebSocket
+	 * Отправка HID события серверу через WebSocket
+	 * @param {WebSocket} ws - WebSocket connection / WebSocket соединение
+	 * @param {string} ev_type - Event type / Тип события
+	 * @param {Object} ev - Event data / Данные события
+	 */
+	var __sendHidEvent = function (ws, ev_type, ev) {
 		if (ev_type === "key") {
 			let data = __ascii_encoder.encode("\x01\x00" + ev.key);
 			data[1] = (ev.state ? 1 : 0);

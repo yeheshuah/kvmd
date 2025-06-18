@@ -23,10 +23,18 @@
 "use strict";
 
 
-import {ROOT_PREFIX} from "../vars.js";
-import {tools, $} from "../tools.js";
+import { ROOT_PREFIX } from "../vars.js";
+import { tools, $ } from "../tools.js";
 
 
+/**
+ * MJPEG HTTP streamer class for PiKVM
+ * Класс MJPEG HTTP стримера для PiKVM
+ * @param {Function} __setActive - Callback when stream becomes active / Колбэк когда стрим становится активным
+ * @param {Function} __setInactive - Callback when stream becomes inactive / Колбэк когда стрим становится неактивным
+ * @param {Function} __setInfo - Callback to set stream info / Колбэк для установки информации о стриме
+ * @param {Function} __organizeHook - Callback to organize stream window / Колбэк для организации окна стрима
+ */
 export function MjpegStreamer(__setActive, __setInactive, __setInfo, __organizeHook) {
 	var self = this;
 
@@ -42,10 +50,26 @@ export function MjpegStreamer(__setActive, __setInactive, __setInfo, __organizeH
 
 	/************************************************************************/
 
+	/**
+	 * Get streamer name for display
+	 * Получение имени стримера для отображения
+	 * @returns {string} Streamer name / Имя стримера
+	 */
 	self.getName = () => "HTTP MJPEG";
+
+	/**
+	 * Get streamer mode identifier
+	 * Получение идентификатора режима стримера
+	 * @returns {string} Streamer mode / Режим стримера
+	 */
 	self.getMode = () => "mjpeg";
 
-	self.getResolution = function() {
+	/**
+	 * Get current stream resolution information
+	 * Получение информации о текущем разрешении стрима
+	 * @returns {Object} Resolution object with real and view dimensions / Объект разрешения с реальными и отображаемыми размерами
+	 */
+	self.getResolution = function () {
 		let el = $("stream-image");
 		return {
 			"real_width": el.naturalWidth,
@@ -55,7 +79,12 @@ export function MjpegStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		};
 	};
 
-	self.ensureStream = function(state) {
+	/**
+	 * Ensure stream is running with given state
+	 * Обеспечение работы стрима с заданным состоянием
+	 * @param {Object} state - Stream state object / Объект состояния стрима
+	 */
+	self.ensureStream = function (state) {
 		if (state) {
 			__state = state;
 			__findId();
@@ -72,7 +101,11 @@ export function MjpegStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
-	self.stopStream = function() {
+	/**
+	 * Stop the stream and show blank image
+	 * Остановка стрима и отображение пустого изображения
+	 */
+	self.stopStream = function () {
 		self.ensureStream(null);
 		let blank = `${ROOT_PREFIX}share/png/blank-stream.png`;
 		if (!String.prototype.endsWith.call($("stream-image").src, blank)) {
@@ -80,7 +113,11 @@ export function MjpegStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
-	var __setStreamActive = function() {
+	/**
+	 * Set stream as active and update FPS info
+	 * Установка стрима как активного и обновление информации о FPS
+	 */
+	var __setStreamActive = function () {
 		let old_fps = __fps;
 		__fps = __state.stream.clients_stat[__id].fps;
 		if (old_fps < 0) {
@@ -90,7 +127,11 @@ export function MjpegStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		__setInfo(true, __state.source.online, `${__fps} fps dynamic`);
 	};
 
-	var __setStreamInactive = function() {
+	/**
+	 * Set stream as inactive and reset state
+	 * Установка стрима как неактивного и сброс состояния
+	 */
+	var __setStreamInactive = function () {
 		let old_fps = __fps;
 		__key = tools.makeRandomId();
 		__id = "";
@@ -103,14 +144,22 @@ export function MjpegStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
-	var __ensureChecking = function() {
+	/**
+	 * Start checking stream status periodically
+	 * Запуск периодической проверки статуса стрима
+	 */
+	var __ensureChecking = function () {
 		if (!__timer) {
 			__timer_retries = 10;
 			__timer = setInterval(__checkStream, 100);
 		}
 	};
 
-	var __stopChecking = function() {
+	/**
+	 * Stop checking stream status
+	 * Остановка проверки статуса стрима
+	 */
+	var __stopChecking = function () {
 		if (__timer) {
 			clearInterval(__timer);
 		}
@@ -118,7 +167,11 @@ export function MjpegStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		__timer_retries = 0;
 	};
 
-	var __findId = function() {
+	/**
+	 * Find stream client ID from cookie
+	 * Поиск ID клиента стрима из cookie
+	 */
+	var __findId = function () {
 		let sc = tools.cookies.get("stream_client");
 		if (__id.length === 0 && sc && sc.startsWith(__key + "/")) {
 			__logInfo("Found acceptable stream_client cookie:", sc);
@@ -126,7 +179,11 @@ export function MjpegStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
-	var __checkStream = function() {
+	/**
+	 * Check stream status and handle reconnection
+	 * Проверка статуса стрима и обработка переподключения
+	 */
+	var __checkStream = function () {
 		__findId();
 
 		if (__id.legnth > 0 && __id in __state.stream.clients_stat) {
@@ -156,5 +213,10 @@ export function MjpegStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
+	/**
+	 * Log information messages for debugging
+	 * Логирование информационных сообщений для отладки
+	 * @param {...*} args - Arguments to log / Аргументы для логирования
+	 */
 	var __logInfo = (...args) => tools.info("Stream [MJPEG]:", ...args);
 }

@@ -23,9 +23,18 @@
 "use strict";
 
 
-import {tools, $} from "../tools.js";
+import { tools, $ } from "../tools.js";
 
 
+/**
+ * Direct H.264 media streamer using WebSocket and VideoDecoder API
+ * Прямой H.264 медиа стример с использованием WebSocket и VideoDecoder API
+ * @param {Function} __setActive - Callback when stream becomes active / Колбэк когда стрим становится активным
+ * @param {Function} __setInactive - Callback when stream becomes inactive / Колбэк когда стрим становится неактивным
+ * @param {Function} __setInfo - Callback to set stream info / Колбэк для установки информации о стриме
+ * @param {Function} __organizeHook - Callback to organize stream window / Колбэк для организации окна стрима
+ * @param {number} __orient - Stream orientation / Ориентация стрима
+ */
 export function MediaStreamer(__setActive, __setInactive, __setInfo, __organizeHook, __orient) {
 	var self = this;
 
@@ -49,11 +58,33 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __organizeH
 
 	/************************************************************************/
 
+	/**
+	 * Get current stream orientation
+	 * Получение текущей ориентации стрима
+	 * @returns {number} Orientation value / Значение ориентации
+	 */
 	self.getOrientation = () => __orient;
+
+	/**
+	 * Get streamer name for display
+	 * Получение имени стримера для отображения
+	 * @returns {string} Streamer name / Имя стримера
+	 */
 	self.getName = () => "Direct H.264";
+
+	/**
+	 * Get streamer mode identifier
+	 * Получение идентификатора режима стримера
+	 * @returns {string} Streamer mode / Режим стримера
+	 */
 	self.getMode = () => "media";
 
-	self.getResolution = function() {
+	/**
+	 * Get current stream resolution information
+	 * Получение информации о текущем разрешении стрима
+	 * @returns {Object} Resolution object with real and view dimensions / Объект разрешения с реальными и отображаемыми размерами
+	 */
+	self.getResolution = function () {
 		return {
 			// Разрешение видео или элемента
 			"real_width": (__canvas.width || __canvas.offsetWidth),
@@ -63,20 +94,34 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		};
 	};
 
-	self.ensureStream = function(state) {
+	/**
+	 * Ensure stream is running with given state
+	 * Обеспечение работы стрима с заданным состоянием
+	 * @param {Object} state - Stream state object / Объект состояния стрима
+	 */
+	self.ensureStream = function (state) {
 		__state = state;
 		__stop = false;
 		__ensureMedia(false);
 	};
 
-	self.stopStream = function() {
+	/**
+	 * Stop the stream and cleanup resources
+	 * Остановка стрима и очистка ресурсов
+	 */
+	self.stopStream = function () {
 		__stop = true;
 		__ensuring = false;
 		__wsForceClose();
 		__setInfo(false, false, "");
 	};
 
-	var __ensureMedia = function(internal) {
+	/**
+	 * Ensure WebSocket connection to media API
+	 * Обеспечение WebSocket соединения с медиа API
+	 * @param {boolean} internal - Whether this is an internal retry / Является ли это внутренней повторной попыткой
+	 */
+	var __ensureMedia = function (internal) {
 		if (__ws === null && !__stop && (!__ensuring || internal)) {
 			__ensuring = true;
 			__setInactive();
@@ -102,13 +147,22 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
-	var __wsOpenHandler = function(ev) {
+	/**
+	 * Handle WebSocket open event
+	 * Обработка события открытия WebSocket
+	 * @param {Event} ev - Open event / Событие открытия
+	 */
+	var __wsOpenHandler = function (ev) {
 		__logInfo("Socket opened:", ev);
 		__missed_heartbeats = 0;
 		__ping_timer = setInterval(__ping, 1000);
 	};
 
-	var __ping = function() {
+	/**
+	 * Send ping to keep connection alive and update info
+	 * Отправка ping для поддержания соединения и обновления информации
+	 */
+	var __ping = function () {
 		try {
 			__missed_heartbeats += 1;
 			if (__missed_heartbeats >= 5) {
@@ -127,7 +181,11 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
-	var __wsForceClose = function() {
+	/**
+	 * Force close WebSocket connection
+	 * Принудительное закрытие WebSocket соединения
+	 */
+	var __wsForceClose = function () {
 		if (__ws) {
 			__ws.onclose = null;
 			__ws.close();
@@ -136,13 +194,23 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		__setInactive();
 	};
 
-	var __wsErrorHandler = function(ev) {
+	/**
+	 * Handle WebSocket error event
+	 * Обработка события ошибки WebSocket
+	 * @param {Event} ev - Error event / Событие ошибки
+	 */
+	var __wsErrorHandler = function (ev) {
 		__logInfo("Socket error:", ev);
 		__setInfo(false, false, ev);
 		__wsForceClose();
 	};
 
-	var __wsCloseHandler = function(ev) {
+	/**
+	 * Handle WebSocket close event
+	 * Обработка события закрытия WebSocket
+	 * @param {Event} ev - Close event / Событие закрытия
+	 */
+	var __wsCloseHandler = function (ev) {
 		__logInfo("Socket closed:", ev);
 		if (__ping_timer) {
 			clearInterval(__ping_timer);
@@ -157,13 +225,24 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
-	var __wsJsonHandler = function(ev_type, ev) {
+	/**
+	 * Handle JSON messages from WebSocket
+	 * Обработка JSON сообщений из WebSocket
+	 * @param {string} ev_type - Event type / Тип события
+	 * @param {Object} ev - Event data / Данные события
+	 */
+	var __wsJsonHandler = function (ev_type, ev) {
 		if (ev_type === "media") {
 			__setupCodec(ev.video);
 		}
 	};
 
-	var __setupCodec = function(formats) {
+	/**
+	 * Setup video codec and start streaming
+	 * Настройка видеокодека и запуск стриминга
+	 * @param {Object} formats - Available video formats / Доступные видео форматы
+	 */
+	var __setupCodec = function (formats) {
 		__closeDecoder();
 		if (formats.h264 === undefined) {
 			let msg = "No H.264 stream available on PiKVM";
@@ -183,10 +262,15 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		__codec = `avc1.${formats.h264.profile_level_id}`;
 		__ws.send(JSON.stringify({
 			"event_type": "start",
-			"event": {"type": "video", "format": "h264"},
+			"event": { "type": "video", "format": "h264" },
 		}));
 	};
 
+	/**
+	 * Handle binary messages from WebSocket
+	 * Обработка бинарных сообщений из WebSocket
+	 * @param {ArrayBuffer} data - Binary data / Бинарные данные
+	 */
 	var __wsBinHandler = async (data) => {
 		let header = new Uint8Array(data.slice(0, 2));
 		if (header[0] === 255) { // Pong
@@ -220,7 +304,7 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __organizeH
 			if (!key) {
 				return false;
 			}
-			await __decoder.configure({"codec": __codec, "optimizeForLatency": true});
+			await __decoder.configure({ "codec": __codec, "optimizeForLatency": true });
 		}
 		if (__decoder.state === "configured") {
 			__setActive();
@@ -238,7 +322,7 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		await __decoder.decode(chunk);
 	};
 
-	var __closeDecoder = function() {
+	var __closeDecoder = function () {
 		if (__decoder !== null) {
 			try {
 				__decoder.close();
@@ -256,7 +340,7 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
-	var __renderFrame = function(frame) {
+	var __renderFrame = function (frame) {
 		if (__frame === null) {
 			__frame = frame;
 			window.requestAnimationFrame(__drawPendingFrame, __canvas);
@@ -265,7 +349,7 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
-	var __drawPendingFrame = function() {
+	var __drawPendingFrame = function () {
 		if (__frame === null) {
 			return;
 		}
@@ -290,7 +374,7 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __organizeH
 			} else {
 				__ctx.save();
 				try {
-					switch(__orient) {
+					switch (__orient) {
 						case 90: __ctx.translate(0, height); __ctx.rotate(-Math.PI / 2); break;
 						case 180: __ctx.translate(width, height); __ctx.rotate(-Math.PI); break;
 						case 270: __ctx.translate(width, 0); __ctx.rotate(Math.PI / 2); break;
@@ -307,7 +391,7 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __organizeH
 		}
 	};
 
-	var __closeFrame = function(frame) {
+	var __closeFrame = function (frame) {
 		if (!tools.browser.is_firefox) {
 			// FIXME: On Firefox, image is flickering when we're closing the frame for some reason.
 			// So we're just not performing the close() and it seems there is no problems here
@@ -324,6 +408,6 @@ export function MediaStreamer(__setActive, __setInactive, __setInfo, __organizeH
 	var __logInfo = (...args) => tools.info("Stream [Media]:", ...args);
 }
 
-MediaStreamer.is_videodecoder_available = function() {
+MediaStreamer.is_videodecoder_available = function () {
 	return !!window.VideoDecoder;
 };
