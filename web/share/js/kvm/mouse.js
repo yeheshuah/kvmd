@@ -339,6 +339,11 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		}
 	};
 
+	/**
+	 * Handle touch end events
+	 * Обработка событий окончания касания
+	 * @param {Event} ev - Touch event / Событие касания
+	 */
 	var __streamTouchEndHandler = function (ev) {
 		ev.preventDefault();
 		__sendPlannedMove();
@@ -349,6 +354,13 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		}
 	};
 
+	/**
+	 * Get touch position relative to target element
+	 * Получение позиции касания относительно целевого элемента
+	 * @param {Event} ev - Touch event / Событие касания
+	 * @param {number} index - Touch index / Индекс касания
+	 * @returns {Object|null} Touch position object with x, y coordinates or null / Объект позиции касания с координатами x, y или null
+	 */
 	var __getTouchPosition = function (ev, index) {
 		if (ev.touches[index].target && ev.touches[index].target.getBoundingClientRect) {
 			let rect = ev.touches[index].target.getBoundingClientRect();
@@ -360,6 +372,11 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		return null;
 	};
 
+	/**
+	 * Handle mouse move events on stream
+	 * Обработка событий перемещения мыши на стриме
+	 * @param {Event} ev - Mouse move event / Событие перемещения мыши
+	 */
 	var __streamMoveHandler = function (ev) {
 		if (__absolute) {
 			let rect = ev.target.getBoundingClientRect();
@@ -375,6 +392,11 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		}
 	};
 
+	/**
+	 * Handle mouse scroll events on stream
+	 * Обработка событий прокрутки мыши на стриме
+	 * @param {Event} ev - Wheel event / Событие колеса мыши
+	 */
 	var __streamScrollHandler = function (ev) {
 		// https://learn.javascript.ru/mousewheel
 		// https://stackoverflow.com/a/24595588
@@ -415,6 +437,11 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		__sendScroll(delta);
 	};
 
+	/**
+	 * Send or plan relative mouse movement
+	 * Отправка или планирование относительного движения мыши
+	 * @param {Object} delta - Movement delta / Дельта движения
+	 */
 	var __sendOrPlanRelativeMove = function (delta) {
 		delta = {
 			"x": Math.min(Math.max(-127, Math.floor(delta.x * __relative_sens)), 127),
@@ -430,6 +457,11 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		}
 	};
 
+	/**
+	 * Send scroll event with rate and direction settings
+	 * Отправка события прокрутки с настройками скорости и направления
+	 * @param {Object} delta - Scroll delta / Дельта прокрутки
+	 */
 	var __sendScroll = function (delta) {
 		// Send a single scroll step defined by rate
 		if (delta.x) {
@@ -450,6 +482,10 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		}
 	};
 
+	/**
+	 * Send planned mouse movement (absolute or relative)
+	 * Отправка запланированного движения мыши (абсолютного или относительного)
+	 */
 	var __sendPlannedMove = function () {
 		if (__absolute) {
 			let pos = __planned_pos;
@@ -470,12 +506,24 @@ export function Mouse(__getGeometry, __recordWsEvent) {
 		}
 	};
 
+	/**
+	 * Send mouse button event
+	 * Отправка события кнопки мыши
+	 * @param {string} button - Button name / Название кнопки
+	 * @param {boolean} state - Button state (pressed/released) / Состояние кнопки (нажата/отпущена)
+	 */
 	var __sendButton = function (button, state) {
 		tools.debug("Mouse: button", (state ? "pressed:" : "released:"), button);
 		__sendPlannedMove();
 		__sendEvent("mouse_button", { "button": button, "state": state });
 	};
 
+	/**
+	 * Send HID event to WebSocket
+	 * Отправка HID события через WebSocket
+	 * @param {string} ev_type - Event type / Тип события
+	 * @param {Object} ev - Event data / Данные события
+	 */
 	var __sendEvent = function (ev_type, ev) {
 		ev = { "event_type": ev_type, "event": ev };
 		if (__ws && !$("hid-mute-switch").checked) {
