@@ -1,0 +1,419 @@
+@startuml Mouse_Sequence_Diagrams
+
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowThickness 2
+skinparam roundcorner 20
+skinparam maxmessagesize 60
+
+title Mouse Class - Sequence Diagrams
+
+' ========================================
+' 1. Constructor and Initialization
+' ========================================
+
+participant "Client" as C
+participant "Mouse" as M
+participant "Keypad" as K
+participant "DOM" as D
+participant "Storage" as S
+participant "Slider" as SL
+
+== Constructor ==
+C -> M: new Mouse(__getGeometry, __recordWsEvent)
+activate M
+M -> K: new Keypad($("stream-mouse-buttons"), __sendButton, false)
+activate K
+K -> K: __init__()
+deactivate K
+
+M -> M: __init__()
+activate M
+
+' Event listeners setup
+M -> D: addEventListener("pointerlockchange", __relativeCapturedHandler)
+M -> D: addEventListener("pointerlockerror", __relativeCapturedHandler)
+M -> D: addEventListener("mouseenter", __streamHoveredHandler(true))
+M -> D: addEventListener("mouseleave", __streamHoveredHandler(false))
+M -> D: addEventListener("mousedown", __streamButtonHandler(ev, true))
+M -> D: addEventListener("mouseup", __streamButtonHandler(ev, false))
+M -> D: addEventListener("contextmenu", ev.preventDefault())
+M -> D: addEventListener("mousemove", __streamMoveHandler)
+M -> D: addEventListener("wheel", __streamScrollHandler)
+M -> D: addEventListener("touchstart", __streamTouchStartHandler)
+M -> D: addEventListener("touchmove", __streamTouchMoveHandler)
+M -> D: addEventListener("touchend", __streamTouchEndHandler)
+
+' Settings initialization
+M -> S: bindSimpleSwitch($("hid-mouse-squash-switch"), "hid.mouse.squash", true)
+M -> SL: setParams($("hid-mouse-sens-slider"), 0.1, 1.9, 0.1, storage.get("hid.mouse.sens", 1.0), __updateRelativeSens)
+M -> SL: setParams($("hid-mouse-rate-slider"), 10, 100, 10, storage.get("hid.mouse.rate", 10), __updateRate)
+M -> S: bindSimpleSwitch($("hid-mouse-reverse-scrolling-switch"), "hid.mouse.reverse_scrolling", false)
+M -> S: bindSimpleSwitch($("hid-mouse-reverse-panning-switch"), "hid.mouse.reverse_panning", false)
+M -> S: bindSimpleSwitch($("hid-mouse-cumulative-scrolling-switch"), "hid.mouse.cumulative_scrolling", cumulative_scrolling)
+M -> SL: setParams($("hid-mouse-scroll-slider"), 1, 25, 1, storage.get("hid.mouse.scroll_rate", 5), __updateScrollRate)
+M -> S: bindSimpleSwitch($("hid-mouse-dot-switch"), "hid.mouse.dot", true, __updateOnlineLeds)
+
+deactivate M
+deactivate M
+
+' ========================================
+' 2. setSocket Method
+' ========================================
+
+== setSocket ==
+C -> M: setSocket(ws)
+activate M
+M -> M: __ws = ws
+alt !__absolute && __isRelativeCaptured()
+    M -> D: exitPointerLock()
+end
+M -> M: __updateOnlineLeds()
+deactivate M
+
+' ========================================
+' 3. setState Method
+' ========================================
+
+== setState ==
+C -> M: setState(online, absolute, hid_online, hid_busy)
+activate M
+
+alt !hid_online
+    M -> M: __online = null
+else
+    M -> M: __online = (online && !hid_busy)
+end
+
+alt !__absolute && absolute && __isRelativeCaptured()
+    M -> D: exitPointerLock()
+end
+
+alt __absolute && !absolute
+    M -> M: __relative_deltas = []
+    M -> M: __relative_touch_pos = null
+end
+
+M -> M: __absolute = absolute
+M -> M: __updateOnlineLeds()
+deactivate M
+
+' ========================================
+' 4. releaseAll Method
+' ========================================
+
+== releaseAll ==
+C -> M: releaseAll()
+activate M
+M -> K: releaseAll()
+activate K
+K -> K: Release all keys
+deactivate K
+deactivate M
+
+' ========================================
+' 5. Mouse Button Events
+' ========================================
+
+== Mouse Button Events ==
+D -> M: mousedown/mouseup event
+activate M
+M -> M: __streamButtonHandler(ev, state)
+activate M
+
+alt __absolute || __isRelativeCaptured()
+    M -> M: switch(ev.button)
+    alt case 0
+        M -> K: emitByCode("left", state)
+    else case 1
+        M -> K: emitByCode("middle", state)
+    else case 2
+        M -> K: emitByCode("right", state)
+    else case 3
+        M -> K: emitByCode("up", state)
+    else case 4
+        M -> K: emitByCode("down", state)
+    end
+else !__absolute && !__isRelativeCaptured() && !state
+    M -> D: requestPointerLock()
+end
+
+deactivate M
+deactivate M
+
+' ========================================
+' 6. Mouse Move Events
+' ========================================
+
+== Mouse Move Events ==
+D -> M: mousemove event
+activate M
+M -> M: __streamMoveHandler(ev)
+activate M
+
+alt __absolute
+    M -> M: rect = ev.target.getBoundingClientRect()
+    M -> M: __planned_pos = {x: ev.clientX - rect.left, y: ev.clientY - rect.top}
+else __isRelativeCaptured()
+    M -> M: __sendOrPlanRelativeMove({x: ev.movementX, y: ev.movementY})
+end
+
+deactivate M
+deactivate M
+
+' ========================================
+' 7. Mouse Scroll Events
+' ========================================
+
+== Mouse Scroll Events ==
+D -> M: wheel event
+activate M
+M -> M: __streamScrollHandler(ev)
+activate M
+
+alt !__absolute && !__isRelativeCaptured()
+    M -> M: return
+end
+
+M -> M: delta = {x: 0, y: 0}
+
+alt cumulative_scrolling enabled
+    M -> M: Process cumulative scrolling logic
+    M -> M: __scroll_delta.x += ev.deltaX * __scroll_fix
+    M -> M: __scroll_delta.y += ev.deltaY * __scroll_fix
+    
+    alt Math.abs(__scroll_delta.x) >= 100
+        M -> M: delta.x = __scroll_delta.x
+        M -> M: __scroll_delta.x = 0
+    end
+    
+    alt Math.abs(__scroll_delta.y) >= 100
+        M -> M: delta.y = __scroll_delta.y
+        M -> M: __scroll_delta.y = 0
+    end
+else
+    M -> M: delta.x = ev.deltaX
+    M -> M: delta.y = ev.deltaY
+end
+
+M -> M: __sendScroll(delta)
+deactivate M
+deactivate M
+
+' ========================================
+' 8. Touch Events
+' ========================================
+
+== Touch Start Events ==
+D -> M: touchstart event
+activate M
+M -> M: __streamTouchStartHandler(ev)
+activate M
+
+alt ev.touches.length == 1
+    alt __absolute
+        M -> M: __planned_pos = __getTouchPosition(ev, 0)
+        M -> M: __sendPlannedMove()
+    else
+        M -> M: __relative_touch_pos = __getTouchPosition(ev, 0)
+    end
+else ev.touches.length >= 2
+    M -> M: __planned_pos = null
+    M -> M: __relative_touch_pos = null
+end
+
+deactivate M
+deactivate M
+
+== Touch Move Events ==
+D -> M: touchmove event
+activate M
+M -> M: __streamTouchMoveHandler(ev)
+activate M
+
+alt ev.touches.length == 1
+    M -> M: pos = __getTouchPosition(ev, 0)
+    alt __absolute
+        M -> M: __planned_pos = pos
+    else __relative_touch_pos == null
+        M -> M: __relative_touch_pos = pos
+    else
+        M -> M: __sendOrPlanRelativeMove({x: pos.x - __relative_touch_pos.x, y: pos.y - __relative_touch_pos.y})
+        M -> M: __relative_touch_pos = pos
+    end
+else ev.touches.length >= 2
+    M -> M: pos = __getTouchPosition(ev, 0)
+    alt __scroll_touch_pos == null
+        M -> M: __scroll_touch_pos = pos
+    else
+        M -> M: dx = __scroll_touch_pos.x - pos.x
+        M -> M: dy = __scroll_touch_pos.y - pos.y
+        alt Math.abs(dx) < 15
+            M -> M: dx = 0
+        end
+        alt Math.abs(dy) < 15
+            M -> M: dy = 0
+        end
+        alt dx || dy
+            M -> M: __sendScroll({x: dx, y: dy})
+            M -> M: __scroll_touch_pos = null
+        end
+    end
+    M -> M: __planned_pos = null
+    M -> M: __relative_touch_pos = null
+end
+
+deactivate M
+deactivate M
+
+== Touch End Events ==
+D -> M: touchend event
+activate M
+M -> M: __streamTouchEndHandler(ev)
+activate M
+M -> M: __sendPlannedMove()
+M -> M: __scroll_touch_pos = null
+alt ev.touches.length >= 2
+    M -> M: __planned_pos = null
+    M -> M: __relative_touch_pos = null
+end
+deactivate M
+deactivate M
+
+' ========================================
+' 9. Internal Methods
+' ========================================
+
+== Internal Methods ==
+
+== __sendPlannedMove ==
+M -> M: __sendPlannedMove()
+activate M
+
+alt __absolute
+    M -> M: pos = __planned_pos
+    alt pos != null && (pos.x != __sent_pos.x || pos.y != __sent_pos.y)
+        M -> M: geo = __getGeometry()
+        M -> M: to = tools.remap(pos.x - geo.x, 0, geo.width - 1, -32768, 32767)
+        M -> M: __sendEvent("mouse_move", {to: to})
+        M -> M: __sent_pos = pos
+    end
+else __relative_deltas.length
+    M -> M: __sendEvent("mouse_relative", {delta: __relative_deltas, squash: true})
+    M -> M: __relative_deltas = []
+end
+
+deactivate M
+
+== __sendOrPlanRelativeMove ==
+M -> M: __sendOrPlanRelativeMove(delta)
+activate M
+M -> M: delta = Math.min(Math.max(-127, Math.floor(delta.x * __relative_sens)), 127)
+alt delta.x || delta.y
+    alt squash enabled
+        M -> M: __relative_deltas.push(delta)
+    else
+        M -> M: __sendEvent("mouse_relative", {delta: delta})
+    end
+end
+deactivate M
+
+== __sendScroll ==
+M -> M: __sendScroll(delta)
+activate M
+alt delta.x
+    M -> M: delta.x = Math.sign(delta.x) * (-__scroll_rate)
+    alt reverse_panning enabled
+        M -> M: delta.x *= -1
+    end
+end
+alt delta.y
+    M -> M: delta.y = Math.sign(delta.y) * (-__scroll_rate)
+    alt reverse_scrolling enabled
+        M -> M: delta.y *= -1
+    end
+end
+alt delta.x || delta.y
+    M -> M: __sendEvent("mouse_wheel", {delta: delta})
+end
+deactivate M
+
+== __sendEvent ==
+M -> M: __sendEvent(ev_type, ev)
+activate M
+M -> M: ev = {event_type: ev_type, event: ev}
+alt __ws && !mute_switch.checked
+    M -> M: __ws.sendHidEvent(ev)
+end
+M -> M: __recordWsEvent(ev)
+deactivate M
+
+== __updateOnlineLeds ==
+M -> M: __updateOnlineLeds()
+activate M
+M -> M: is_captured = __absolute ? (__stream_hovered || is_mobile) : __isRelativeCaptured()
+M -> M: Update LED class and title
+alt __absolute && is_captured
+    M -> M: Update stream-box classes
+end
+deactivate M
+
+== __isRelativeCaptured ==
+M -> M: __isRelativeCaptured()
+activate M
+M -> M: return (document.pointerLockElement == $("stream-box"))
+deactivate M
+
+== __relativeCapturedHandler ==
+D -> M: pointerlockchange/pointerlockerror
+activate M
+M -> M: __relativeCapturedHandler()
+activate M
+M -> M: tools.info("Relative mouse", captured ? "captured" : "released")
+M -> M: __updateOnlineLeds()
+deactivate M
+deactivate M
+
+== __streamHoveredHandler ==
+D -> M: mouseenter/mouseleave
+activate M
+M -> M: __streamHoveredHandler(hovered)
+activate M
+alt __absolute
+    M -> M: __stream_hovered = hovered
+    M -> M: __updateOnlineLeds()
+end
+deactivate M
+deactivate M
+
+' ========================================
+' 10. Settings Update Methods
+' ========================================
+
+== Settings Updates ==
+
+== __updateRate ==
+SL -> M: __updateRate(value)
+activate M
+M -> D: Update rate display
+M -> S: Set storage value
+M -> M: clearInterval(__timer)
+M -> M: __timer = setInterval(__sendPlannedMove, value)
+deactivate M
+
+== __updateScrollRate ==
+SL -> M: __updateScrollRate(value)
+activate M
+M -> D: Update scroll rate display
+M -> S: Set storage value
+M -> M: __scroll_rate = value
+deactivate M
+
+== __updateRelativeSens ==
+SL -> M: __updateRelativeSens(value)
+activate M
+M -> D: Update sensitivity display
+M -> S: Set storage value
+M -> M: __relative_sens = value
+deactivate M
+
+@enduml 
