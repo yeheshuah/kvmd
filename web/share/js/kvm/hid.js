@@ -27,7 +27,7 @@ import { tools, $, $$$ } from "../tools.js";
 import { wm } from "../wm.js";
 
 import { Keyboard } from "./keyboard.js";
-import { Mouse } from "./mouse.js";
+import { MouseController as Mouse } from "./mouse.js";
 
 
 /**
